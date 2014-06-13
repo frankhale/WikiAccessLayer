@@ -13,8 +13,11 @@ open System
 open System.Linq
 open System.Data
 open System.Data.Linq
+open System.Text
+open System.Text.RegularExpressions
 open Microsoft.FSharp.Data.TypeProviders
 open Microsoft.FSharp.Linq
+open MarkdownSharp
 open FSharpx.Collections
 
 //////////
@@ -25,6 +28,7 @@ type Page(guid, createdOn, modifiedOn, author, title, body) =
   let mutable _guid : string = guid
   let mutable _createdOn : DateTime = createdOn
   let mutable _modifiedOn : Nullable<DateTime> = modifiedOn
+  let mutable _publishOn : Nullable<DateTime> = Unchecked.defaultof<Nullable<DateTime>>
   let mutable _author : int = author
   let mutable _title : string = title
   let mutable _body : string = body  
@@ -41,6 +45,10 @@ type Page(guid, createdOn, modifiedOn, author, title, body) =
     with public get () = _modifiedOn
     and public set (value) = _modifiedOn <- value
     
+  member this.PublishOn
+    with public get () = _publishOn
+    and public set (value) = _publishOn <- value
+
   member this.Author 
     with public get () = _author
     and public set (value) = _author <- value
@@ -142,12 +150,17 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
     type dbSchema = SqlDataConnection<"Data Source=.\SQLEXPRESS;Initial Catalog=wiki;Integrated Security=True">
 
     let db = dbSchema.GetDataContext()
+    let md = new Markdown()
     let usersTable = db.Users
     let pagesTable = db.Pages
     let commentsTable = db.Comments
     let tagsTable = db.Tags
     let pageTagsTable = db.PageTags
-
+    
+    //let matchSpecialCharacters = new Regex("(?:[^a-z0-9 ]|(?<=['\"])s)", RegexOptions.IgnoreCase ||| RegexOptions.CultureInvariant ||| RegexOptions.Compiled);
+    //let matchWhitespaces = new Regex(@"\s+", RegexOptions.Compiled)    
+    let markdownBlock = new Regex(@"\[md\](?<block>[\s\S]+?)\[/md\]", RegexOptions.Compiled)
+    
     //////////
     // USER //
     //////////
@@ -395,6 +408,19 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       }
       |> Seq.tryHead
 
+    let GetMarkdownProcessedPage guid =
+      let page = GetPageByGuid guid
+      
+      let processPage(p : Page) = 
+        let mdMatches = markdownBlock.Matches(p.Body)
+        for m in mdMatches do
+          p.Body <- p.Body.Replace(m.Value, md.Transform(m.Groups.["block"].Value.Trim()))
+        p
+               
+      match page with
+      | None -> Unchecked.defaultof<Page>
+      | Some p -> processPage p
+
     let CreatePage author title body = 
       let p = 
         new dbSchema.ServiceTypes.Pages(Guid = Guid.NewGuid().ToString(), Author = author, Title = title, Body = body, 
@@ -423,4 +449,18 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       match GetRawPageByGuid guid with
       | None -> ()
       | Some p -> db.Pages.DeleteOnSubmit p
+                  db.DataContext.SubmitChanges()
+
+    let PublishPageOn guid date =
+      let p = GetPageByGuid guid
+      match p with 
+      | None -> ()
+      | Some p -> p.PublishOn <- date
+                  db.DataContext.SubmitChanges()
+
+    let UnpublishPage guid =
+      let p = GetPageByGuid guid
+      match p with 
+      | None -> ()
+      | Some p -> p.PublishOn <- Unchecked.defaultof<Nullable<DateTime>>
                   db.DataContext.SubmitChanges()
