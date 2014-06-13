@@ -4,7 +4,7 @@
 // operations on a very basic wiki implementation.
 //
 // Frank Hale <frankhale@gmail.com>
-// 6 June 2014
+// 13 June 2014
 //
 
 namespace WikiAccessLayer
@@ -152,7 +152,7 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
     // USER //
     //////////
 
-    let GetUsers() = 
+    let GetUsers = 
       query { 
         for user in usersTable do
           select user
@@ -160,7 +160,7 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       |> Seq.map(fun u -> new User(u.Id, u.User_name, u.Full_name))
 
 
-    let GetUserById(id) = 
+    let GetUserById id = 
       query { 
         for u in db.Users do
           where (u.Id = id)
@@ -169,7 +169,7 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       |> Seq.map(fun u -> new User(u.Id, u.User_name, u.Full_name))
       |> Seq.tryHead   
 
-    let GetUserByUserName(userName) = 
+    let GetUserByUserName userName = 
       query { 
         for u in db.Users do
           where (u.User_name = userName)
@@ -178,10 +178,10 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       |> Seq.map(fun u -> new User(u.Id, u.User_name, u.Full_name))
       |> Seq.tryHead
       |> function        
-         | Some u -> u
          | None -> Unchecked.defaultof<User>
-     
-    let UpdateUser(userName, fullName) = 
+         | Some u -> u
+              
+    let UpdateUser userName fullName = 
       query { 
         for u in db.Users do
           where (u.User_name = userName)
@@ -190,82 +190,27 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       }
       |> function
          | null -> failwith "User does not exist."
-         | u ->
-              u.Full_name <- fullName
-              db.DataContext.SubmitChanges()
+         | u -> u.Full_name <- fullName
+                db.DataContext.SubmitChanges()
 
-    let CreateUser(fullName, userName) = 
+    let CreateUser fullName userName = 
       let u = new dbSchema.ServiceTypes.Users(Full_name = fullName, User_name = userName)
-      usersTable.InsertOnSubmit(u)
+      usersTable.InsertOnSubmit u
       db.DataContext.SubmitChanges()
-
-    //////////
-    // PAGE //
-    //////////
-
-    let GetPages() = 
-      query { 
-        for p in pagesTable do
-          select p
-      }
-      |> Seq.map(fun p -> new Page(p.Guid, p.Created_on, p.Modified_on, p.Author, p.Title, p.Body))
-
-    let GetPageByGuid(guid) = 
-      query { 
-        for p in db.Pages do
-          where (p.Guid = guid)
-          select p
-      }
-      |> Seq.map(fun p -> new Page(p.Guid, p.Created_on, p.Modified_on, p.Author, p.Title, p.Body))
-      |> Seq.tryHead
-
-    let GetRawPageByGuid(guid) = 
-      query { 
-        for p in db.Pages do
-          where (p.Guid = guid)
-          select p
-      }
-      |> Seq.tryHead
-
-    let CreatePage(author, title, body) = 
-      let p = 
-        new dbSchema.ServiceTypes.Pages(Guid = Guid.NewGuid().ToString(), Author = author, Title = title, Body = body, 
-                                        Created_on = DateTime.Now)
-      pagesTable.InsertOnSubmit(p)
-      db.DataContext.SubmitChanges()
-      p.Id
-
-    let EditPage(guid, title, body) =       
-      let makeChangesToPage(p : dbSchema.ServiceTypes.Pages) =
-        p.Modified_on <- System.Nullable DateTime.Now
-        p.Title <- title
-        p.Body <- body
-        db.DataContext.SubmitChanges()
-      
-      match GetRawPageByGuid(guid) with
-      | Some p -> makeChangesToPage(p)
-      | None -> ()
-      
-    let DeletePage(guid) =
-      match GetRawPageByGuid(guid) with
-      | Some p -> db.Pages.DeleteOnSubmit(p)
-                  db.DataContext.SubmitChanges()
-      | None -> ()
 
     /////////////
     // COMMENT //
     /////////////
 
-    let GetCommentById(id) = 
+    let GetCommentById id = 
       query { 
         for c in db.Comments do
           where (c.Id = id)
           select c
       }
-      |> Seq.map(fun c -> new Comment(c.Guid, c.Created_on, c.Modified_on, c.Author, c.Id, c.Text))
-      |> Seq.tryHead
+      |> Seq.map(fun c -> new Comment(c.Guid, c.Created_on, c.Modified_on, c.Author, c.Id, c.Text))      
 
-    let GetCommentByGuid(guid) = 
+    let GetCommentByGuid guid = 
       query { 
         for c in db.Comments do
           where (c.Guid = guid)
@@ -273,40 +218,41 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       }
       |> Seq.map(fun c -> new Comment(c.Guid, c.Created_on, c.Modified_on, c.Author, c.Id, c.Text))
 
-    let GetRawCommentByGuid(guid) = 
+    let GetRawCommentByGuid guid = 
       query { 
         for c in db.Comments do
           where (c.Guid = guid)
           select c
       }
-      |> Seq.tryHead
+      |> Seq.tryHead 
 
-    let CreateComment(pageId, author, comment) = 
+    let CreateComment pageId author comment = 
       let c = new dbSchema.ServiceTypes.Comments(Page = pageId, Author = author, Text = comment, Created_on = DateTime.Now)
-      commentsTable.InsertOnSubmit(c)
+      commentsTable.InsertOnSubmit c
       db.DataContext.SubmitChanges
 
-    let EditComment(guid, text) =      
+    let EditComment guid text =      
       let makeChangesToComment(c : dbSchema.ServiceTypes.Comments) =
         c.Modified_on <- System.Nullable DateTime.Now
         c.Text <- text
         db.DataContext.SubmitChanges()
       
-      match GetRawCommentByGuid(guid) with
-      | Some c -> makeChangesToComment(c)
+      match GetRawCommentByGuid guid with
       | None -> ()
+      | Some c -> makeChangesToComment c
+      
 
-    let DeleteComment(guid) = 
-      match GetRawCommentByGuid(guid) with
-      | Some c -> db.Comments.DeleteOnSubmit(c)
-                  db.DataContext.SubmitChanges()
+    let DeleteComment guid = 
+      match GetRawCommentByGuid guid with
       | None -> ()
+      | Some c -> db.Comments.DeleteOnSubmit c
+                  db.DataContext.SubmitChanges()
 
     /////////
     // TAG //
     /////////
 
-    let CreateTag(name) =
+    let CreateTag name =
       let tagExists = query {
         for t in db.Tags do
         where (t.Name = name)
@@ -316,13 +262,13 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
 
       if (tagExists = null) then 
         let tag = new dbSchema.ServiceTypes.Tags(Name = name)
-        db.Tags.InsertOnSubmit(tag)
+        db.Tags.InsertOnSubmit tag
         db.DataContext.SubmitChanges()
         tag.Id
       else 
         tagExists.Id
 
-    let GetTagId(name) =
+    let GetTagId name =
       query {
         for t in db.Tags do
         where (t.Name = name)
@@ -330,13 +276,14 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       }
       |> Seq.tryHead
       |> function
-         | Some t -> t.Id
          | None -> -1
+         | Some t -> t.Id
 
-    let CreatePageTag(tagId, pageId) =
+    let CreatePageTag pageId tagId =
       let tagExists = query {
         for t in db.PageTags do
-        where (t.Page = pageId)
+        where (t.Page = pageId &&
+               t.Tag = tagId)
         select t
         headOrDefault
       }
@@ -345,10 +292,13 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
         let pt = new dbSchema.ServiceTypes.PageTags()
         pt.Page <- pageId
         pt.Tag <- tagId
-        db.PageTags.InsertOnSubmit(pt)
+        db.PageTags.InsertOnSubmit pt
         db.DataContext.SubmitChanges()
+        pt.Id
+      else
+        -1
 
-    let DeleteTag(name) =
+    let DeleteTag name =
       query {
         for t in db.Tags do
         where (t.Name = name)
@@ -357,10 +307,10 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       |> Seq.tryHead
       |> function
           | None -> ()
-          | Some t -> db.Tags.DeleteOnSubmit(t)
+          | Some t -> db.Tags.DeleteOnSubmit t
                       db.DataContext.SubmitChanges()
 
-    let DeletePageTag(pageId, name) =
+    let DeletePageTag pageId name =
       let tag = query {
         for t in db.Tags do
         where (t.Name = name)
@@ -377,10 +327,10 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
         |> Seq.tryHead
         |> function
            | None -> () 
-           | Some pt -> db.PageTags.DeleteOnSubmit(pt)
+           | Some pt -> db.PageTags.DeleteOnSubmit pt
                         db.DataContext.SubmitChanges()
 
-    let GetPagesForTag(name) =
+    let GetPagesForTag name =
       query {
         for p in db.PagesWithTags do
         where (p.Tag = name)
@@ -388,8 +338,8 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       }
       |> Seq.map(fun x -> new Page(guid = x.Guid, createdOn = x.Created_on, modifiedOn = x.Modified_on, author = x.Author, title = x.Title, body = x.Body))
 
-    let GetTagsForPage(guid) =
-      let tagsForPage(pageId) =
+    let GetTagsForPage guid =
+      let tagsForPage pageId =
         query {
           for t in db.TagsForPage do
           where (pageId = t.Id)
@@ -403,5 +353,74 @@ type Comment(guid, createdOn, modifiedOn, author, page, text) =
       }
       |> Seq.tryHead
       |> function
-         | Some p -> tagsForPage(p.Id) |> seq
          | None -> [] |> seq
+         | Some p -> tagsForPage p.Id |> seq         
+
+    //////////
+    // PAGE //
+    //////////
+
+    let GetPageById id = 
+      query { 
+        for p in pagesTable do
+          select p
+      }
+      |> Seq.map(fun p -> new Page(p.Guid, p.Created_on, p.Modified_on, p.Author, p.Title, p.Body))
+      |> Seq.tryHead
+      |> function
+         | None -> Unchecked.defaultof<Page>
+         | Some p -> p
+               
+    let GetPages = 
+      query { 
+        for p in pagesTable do
+          select p
+      }
+      |> Seq.map(fun p -> new Page(p.Guid, p.Created_on, p.Modified_on, p.Author, p.Title, p.Body))
+
+    let GetPageByGuid guid = 
+      query { 
+        for p in db.Pages do
+          where (p.Guid = guid)
+          select p
+      }
+      |> Seq.map(fun p -> new Page(p.Guid, p.Created_on, p.Modified_on, p.Author, p.Title, p.Body))
+      |> Seq.tryHead
+
+    let GetRawPageByGuid guid = 
+      query { 
+        for p in db.Pages do
+          where (p.Guid = guid)
+          select p
+      }
+      |> Seq.tryHead
+
+    let CreatePage author title body = 
+      let p = 
+        new dbSchema.ServiceTypes.Pages(Guid = Guid.NewGuid().ToString(), Author = author, Title = title, Body = body, 
+                                        Created_on = DateTime.Now)
+      pagesTable.InsertOnSubmit p
+      db.DataContext.SubmitChanges()
+      p.Id
+
+    let CreatePageWithTags author title body tags =
+      let id = CreatePage author title body
+      tags |> Seq.iter(fun t -> CreatePageTag id <| CreateTag t |> ignore)
+      id
+
+    let EditPage guid title body =       
+      let makeChangesToPage(p : dbSchema.ServiceTypes.Pages) =
+        p.Modified_on <- System.Nullable DateTime.Now
+        p.Title <- title
+        p.Body <- body
+        db.DataContext.SubmitChanges()
+      
+      match GetRawPageByGuid guid with
+      | None -> ()
+      | Some p -> makeChangesToPage p
+      
+    let DeletePage guid =
+      match GetRawPageByGuid guid with
+      | None -> ()
+      | Some p -> db.Pages.DeleteOnSubmit p
+                  db.DataContext.SubmitChanges()

@@ -1,10 +1,6 @@
 ﻿// This is just a little console app to test the functionality
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using WikiAccessLayer;
 
 namespace Test
@@ -22,6 +18,21 @@ namespace Test
 
 			//Data.CreatePageTag(1, 3);
 			//Data.DeletePageTag(3, "testing");
+
+			var pageId = Data.CreatePageWithTags(user.Id, "Test page with tags #2", "This is a test page #2", new String[] { "bar", "foo", "abc", "sweet" });
+			var page = Data.GetPageById(pageId);
+
+			if (page != null)
+			{
+				var tags = Data.GetTagsForPage(page.Guid);
+
+				Console.WriteLine("Page Title: {0}", page.Title);
+
+				foreach (var t in tags)
+				{
+					Console.WriteLine("Page Tag: {0}", t.Tag);
+				}
+			}
 		}
 	}
 }
